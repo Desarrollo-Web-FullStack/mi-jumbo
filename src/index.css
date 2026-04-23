@@ -19,3 +19,11 @@
   --color-outline: #727783;
   --color-outline-variant: #c2c6d4;
 }
+
+@utility scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
