@@ -25,3 +25,6 @@ dist-ssr
 
 # Stitch temp outputs
 stitch_output.json
+
+# MCP config (contains API keys)
+.mcp.json
