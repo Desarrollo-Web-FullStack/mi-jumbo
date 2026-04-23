@@ -1,8 +1,29 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { authFirebase } from "../back/auth";
+import { signInWithEmailAndPassword } from "firebase/auth";
 
 function Login() {
+  const [user, setUser] = useState("")
+  const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false);
+  const navigate = useNavigate();
+
+  const auth = async (user, password) => {
+    try {
+      await signInWithEmailAndPassword(authFirebase, user, password)
+
+      alert("Autenticado")
+      navigate("/")
+    } catch (error) {
+      alert("Credenciales incorrectas")
+    }
+  }
+
+  const onSubmit = (event) => {
+    event.preventDefault()
+    auth(user, password)
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-surface to-blue-50 flex font-sans">
@@ -98,7 +119,7 @@ function Login() {
                 Please enter your details to sign in.
               </p>
 
-              <form className="mt-8 space-y-5">
+              <form className="mt-8 space-y-5" onSubmit={onSubmit}>
                 <div>
                   <label className="block text-sm font-medium text-on-surface mb-1.5">
                     Email Address
@@ -123,6 +144,7 @@ function Login() {
                       type="email"
                       placeholder="you@example.com"
                       className="w-full pl-11 pr-4 py-3 lg:py-3.5 rounded-xl bg-surface-container-low text-on-surface placeholder:text-outline-variant text-sm focus:outline-none focus:ring-2 focus:ring-primary-container/30 transition-all"
+                      onChange={e => setUser(e.target.value)}
                     />
                   </div>
                 </div>
@@ -159,6 +181,7 @@ function Login() {
                       type={showPassword ? "text" : "password"}
                       placeholder="••••••••"
                       className="w-full pl-11 pr-11 py-3 lg:py-3.5 rounded-xl bg-surface-container-low text-on-surface placeholder:text-outline-variant text-sm focus:outline-none focus:ring-2 focus:ring-primary-container/30 transition-all"
+                      onChange={e => setPassword(e.target.value)}
                     />
                     <button
                       type="button"
