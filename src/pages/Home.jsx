@@ -1,6 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { collection, getDocs, query, where, limit, startAfter } from "firebase/firestore";
+import { db } from "../back/database.js";
 import { Link, useNavigate } from "react-router-dom";
 import { logout } from "../back/auth"
+import ProductCard from "../components/molecules/ProductCard";
+import NavItem from "../components/atoms/NavItem";
 
 const categories = [
   "All",
@@ -11,78 +15,68 @@ const categories = [
   "Toys",
 ];
 
-const products = [
-  {
-    id: 1,
-    name: "Organic Hass Avocados, Pack of 4",
-    price: 4.99,
-    category: "Groceries",
-    badge: "Fresh",
-    image: "https://images.unsplash.com/photo-1523049673857-eb18f1d7b578?w=300&h=300&fit=crop",
-  },
-  {
-    id: 2,
-    name: "Nike Air Zoom Pegasus 39 Men's",
-    price: 120.0,
-    category: "Footwear",
-    image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=300&h=300&fit=crop",
-  },
-  {
-    id: 3,
-    name: "Apple Watch Series 8 GPS 41mm",
-    price: 349.0,
-    originalPrice: 399.0,
-    category: "Electronics",
-    badge: "Sale",
-    image: "https://images.unsplash.com/photo-1546868871-af0de0ae72be?w=300&h=300&fit=crop",
-  },
-  {
-    id: 4,
-    name: "Premium Whole Bean Espresso Roast 1kg",
-    price: 24.5,
-    category: "Groceries",
-    image: "https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=300&h=300&fit=crop",
-  },
-  {
-    id: 5,
-    name: "Hydrating Hyaluronic Acid Serum 30ml",
-    price: 32.0,
-    category: "Beauty",
-    image: "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=300&h=300&fit=crop",
-  },
-  {
-    id: 6,
-    name: "Monstera Deliciosa - Medium Pot",
-    price: 45.0,
-    category: "Home & Living",
-    image: "https://images.unsplash.com/photo-1614594975525-e45190c55d0b?w=300&h=300&fit=crop",
-  },
-  {
-    id: 7,
-    name: "Sony WH-1000XM5 Noise Cancelling",
-    price: 348.0,
-    category: "Electronics",
-    badge: "Safe Work",
-    image: "https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?w=300&h=300&fit=crop",
-  },
-  {
-    id: 8,
-    name: "Artisan Sourdough Loaf",
-    price: 6.5,
-    category: "Groceries",
-    badge: "Fresh",
-    image: "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=300&h=300&fit=crop",
-  },
-];
-
 function Home() {
   const [activeCategory, setActiveCategory] = useState("All");
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [lastVisible, setLastVisible] = useState(null);
+  const [hasMore, setHasMore] = useState(true);
   const navigate = useNavigate();
 
-  const filtered =
-    activeCategory === "All"
-      ? products
-      : products.filter((p) => p.category === activeCategory);
+  useEffect(() => {
+    const fetchProducts = async () => {
+      setLoading(true);
+      try {
+        let q;
+        if (activeCategory === "All") {
+          q = query(collection(db, "products"), limit(10));
+        } else {
+          q = query(collection(db, "products"), where("category", "==", activeCategory), limit(10));
+        }
+
+        const querySnapshot = await getDocs(q);
+        const productsList = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
+        setProducts(productsList);
+        setLastVisible(querySnapshot.docs[querySnapshot.docs.length - 1]);
+        setHasMore(querySnapshot.docs.length === 10);
+      } catch (error) {
+        console.error("Error fetching products: ", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProducts();
+  }, [activeCategory]);
+
+  const fetchMore = async () => {
+    if (!lastVisible) return;
+
+    try {
+      let q;
+      if (activeCategory === "All") {
+        q = query(collection(db, "products"), startAfter(lastVisible), limit(10));
+      } else {
+        q = query(collection(db, "products"), where("category", "==", activeCategory), startAfter(lastVisible), limit(10));
+      }
+
+      const querySnapshot = await getDocs(q);
+      const productsList = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      setProducts(prev => [...prev, ...productsList]);
+      setLastVisible(querySnapshot.docs[querySnapshot.docs.length - 1]);
+      setHasMore(querySnapshot.docs.length === 10);
+    } catch (error) {
+      console.error("Error fetching more products: ", error);
+    }
+  };
 
   const myLogout = async () => {
     await logout();
@@ -185,16 +179,33 @@ function Home() {
 
         {/* Product grid */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 lg:gap-5">
-          {filtered.map((product) => (
+          {products.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}
         </div>
 
-        {filtered.length === 0 && (
+        {loading ? (
+          <div className="text-center py-16">
+            <p className="text-on-surface-variant text-sm">
+              Loading products...
+            </p>
+          </div>
+        ) : products.length === 0 && (
           <div className="text-center py-16">
             <p className="text-on-surface-variant text-sm">
               No products found in this category.
             </p>
+          </div>
+        )}
+
+        {hasMore && products.length > 0 && !loading && (
+          <div className="flex justify-center mt-8">
+            <button
+              onClick={fetchMore}
+              className="px-6 py-2 bg-primary-container text-on-primary rounded-full text-sm font-medium hover:opacity-90 transition-opacity cursor-pointer"
+            >
+              Load More
+            </button>
           </div>
         )}
       </main>
@@ -212,101 +223,6 @@ function Home() {
   );
 }
 
-function ProductCard({ product }) {
-  return (
-    <div className="bg-surface-container-lowest rounded-2xl overflow-hidden group shadow-[0_2px_12px_rgba(0,72,141,0.04)] hover:shadow-[0_8px_32px_rgba(0,72,141,0.08)] transition-shadow">
-      {/* Image */}
-      <div className="relative aspect-square bg-surface-container-low overflow-hidden">
-        <img
-          src={product.image}
-          alt={product.name}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-        />
-        {product.badge && (
-          <span
-            className={`absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider text-white ${product.badge === "Fresh"
-              ? "bg-secondary"
-              : product.badge === "Sale"
-                ? "bg-red-500"
-                : "bg-primary-container"
-              }`}
-          >
-            {product.badge}
-          </span>
-        )}
-      </div>
 
-      {/* Info */}
-      <div className="p-3 lg:p-4">
-        <p className="text-[11px] text-outline font-medium uppercase tracking-wider">
-          {product.category}
-        </p>
-        <h3 className="text-sm font-semibold text-on-surface mt-1 leading-snug line-clamp-2 min-h-[2.5rem]">
-          {product.name}
-        </h3>
-        <div className="flex items-center justify-between mt-2.5">
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-base font-bold text-secondary">
-              ${product.price.toFixed(2)}
-            </span>
-            {product.originalPrice && (
-              <span className="text-xs text-outline line-through">
-                ${product.originalPrice.toFixed(2)}
-              </span>
-            )}
-          </div>
-          <button className="w-8 h-8 rounded-full bg-primary-container text-on-primary flex items-center justify-center hover:opacity-90 active:scale-95 transition-all cursor-pointer shadow-[0_4px_12px_rgba(0,72,141,0.25)]">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-            </svg>
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function NavItem({ icon, label, active, badge }) {
-  const icons = {
-    home: (
-      <svg className="w-6 h-6" fill={active ? "currentColor" : "none"} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={active ? 0 : 1.5}>
-        {active ? (
-          <path d="M11.47 3.84a.75.75 0 011.06 0l8.69 8.69a.75.75 0 01-.53 1.28h-1.44v7.44a.75.75 0 01-.75.75h-4.5a.75.75 0 01-.75-.75v-4.5h-3v4.5a.75.75 0 01-.75.75h-4.5a.75.75 0 01-.75-.75v-7.44H2.31a.75.75 0 01-.53-1.28l8.69-8.69z" />
-        ) : (
-          <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955a1.126 1.126 0 011.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
-        )}
-      </svg>
-    ),
-    search: (
-      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-      </svg>
-    ),
-    cart: (
-      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121 0 2.002-.881 1.745-1.97l-1.655-7.03H5.25" />
-      </svg>
-    ),
-    profile: (
-      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-      </svg>
-    ),
-  };
-
-  return (
-    <button className={`flex flex-col items-center gap-0.5 px-4 py-1 ${active ? "text-primary-container" : "text-outline"}`}>
-      <div className="relative">
-        {icons[icon]}
-        {badge && (
-          <span className="absolute -top-1.5 -right-2.5 w-4.5 h-4.5 bg-secondary text-white text-[9px] font-bold rounded-full flex items-center justify-center min-w-[18px] min-h-[18px]">
-            {badge}
-          </span>
-        )}
-      </div>
-      <span className="text-[10px] font-medium">{label}</span>
-    </button>
-  );
-}
 
 export default Home;

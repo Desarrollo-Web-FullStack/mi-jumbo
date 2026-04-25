@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router-dom';
 import Home from './pages/Home';
 import About from './pages/About';
 import Login from './pages/Login';
+import Cart from './pages/Cart';
 import ProtectedRoute from './utils/routes/ProtectedRoute';
 import PublicRoute from './utils/routes/PublicRoute';
 
@@ -11,6 +12,7 @@ function App() {
       <Route path="/" element={<ProtectedRoute element={<Home />} />} />
       <Route path="/sobre-nosotros" element={<ProtectedRoute element={<About />} />} />
       <Route path="/iniciar-sesion" element={<PublicRoute element={<Login />} />} />
+      <Route path="/carrito" element={<ProtectedRoute element={<Cart />} />} />
     </Routes>
   )
 }
